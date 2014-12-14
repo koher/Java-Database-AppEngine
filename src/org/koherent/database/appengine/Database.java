@@ -1,15 +1,18 @@
 package org.koherent.database.appengine;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.koherent.database.AbstractDatabase;
+import org.koherent.database.DatabaseException;
 import org.koherent.database.DuplicateIdException;
 import org.koherent.database.IdNotFoundException;
-import org.koherent.database.InterruptedTransactionException;
 import org.koherent.database.Value;
 
 import com.google.appengine.api.datastore.DatastoreFailureException;
@@ -20,56 +23,51 @@ import com.google.appengine.api.datastore.EntityNotFoundException;
 import com.google.appengine.api.datastore.FetchOptions;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.Query;
+import com.google.appengine.api.datastore.Query.FilterOperator;
 import com.google.appengine.api.datastore.Transaction;
 
-public abstract class Database<I, V extends Value<I>> implements
-		org.koherent.database.Database<I, V> {
+public abstract class Database<I, V extends Value<I>> extends
+		AbstractDatabase<I, V> implements org.koherent.database.Database<I, V> {
 	protected static final int NUMBER_OF_MAX_RETRIES = 3;
 
-	public boolean exists(I id) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return exists(datastore, id);
+	public boolean exists(I id) throws DatabaseException {
+		return exists(DatastoreServiceFactory.getDatastoreService(), id);
 	}
 
 	protected boolean exists(DatastoreService datastore, I id)
-			throws InterruptedTransactionException {
+			throws DatabaseException {
 		return exists(datastore, null, id);
 	}
 
 	protected boolean exists(DatastoreService datastore,
-			Transaction transaction, I id)
-			throws InterruptedTransactionException {
-		try {
-			datastore.get(transaction, toKey(id));
-
-			return true;
-		} catch (EntityNotFoundException e) {
-			return false;
-		}
+			Transaction transaction, I id) throws DatabaseException {
+		return getExistingIds(datastore, transaction, Collections.singleton(id))
+				.hasNext();
 	}
 
-	public Set<I> exists(Iterable<I> ids)
-			throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return exists(datastore, ids);
+	@Override
+	public Iterator<? extends I> getExistingIds(Iterable<? extends I> ids)
+			throws DatabaseException {
+		return getExistingIds(DatastoreServiceFactory.getDatastoreService(),
+				ids);
 	}
 
-	protected Set<I> exists(DatastoreService datastore, Iterable<I> ids)
-			throws InterruptedTransactionException {
-		return exists(datastore, null, ids);
+	protected Iterator<? extends I> getExistingIds(DatastoreService datastore,
+			Iterable<? extends I> ids) throws DatabaseException {
+		return getExistingIds(datastore, null, ids);
 	}
 
-	protected Set<I> exists(DatastoreService datastore,
-			Transaction transaction, Iterable<I> ids)
-			throws InterruptedTransactionException {
-		return keyExists(datastore, transaction, idsToKeys(ids));
+	protected Iterator<? extends I> getExistingIds(DatastoreService datastore,
+			Transaction transaction, Iterable<? extends I> ids)
+			throws DatabaseException {
+		Query query = new Query(getKind());
+		query.setFilter(new Query.FilterPredicate(Entity.KEY_RESERVED_PROPERTY,
+				FilterOperator.IN, idsToKeys(ids)));
+
+		return searchIds(datastore, transaction, query);
 	}
 
-	protected Set<I> keyExists(DatastoreService datastore,
+	protected Set<? extends I> keyExists(DatastoreService datastore,
 			Transaction transaction, Iterable<Key> keys) {
 		Set<I> existingIds = new HashSet<I>();
 
@@ -82,82 +80,69 @@ public abstract class Database<I, V extends Value<I>> implements
 	}
 
 	@Override
-	public List<I> getIds(int limit) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return getIds(datastore, limit);
+	public Iterator<? extends I> getIds(int limit) throws DatabaseException {
+		return getIds(DatastoreServiceFactory.getDatastoreService(), limit);
 	}
 
-	protected List<I> getIds(DatastoreService datastore, int limit)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends I> getIds(DatastoreService datastore, int limit)
+			throws DatabaseException {
 		return getIds(datastore, null, limit);
 	}
 
-	protected List<I> getIds(DatastoreService datastore,
-			Transaction transaction, int limit)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends I> getIds(DatastoreService datastore,
+			Transaction transaction, int limit) throws DatabaseException {
 		return getIds(datastore, transaction, limit, 0);
 	}
 
 	@Override
-	public List<I> getIds(int limit, int offset)
-			throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return getIds(datastore, limit, offset);
+	public Iterator<? extends I> getIds(int limit, int offset)
+			throws DatabaseException {
+		return getIds(DatastoreServiceFactory.getDatastoreService(), limit,
+				offset);
 	}
 
-	protected List<I> getIds(DatastoreService datastore, int limit, int offset) {
+	protected Iterator<? extends I> getIds(DatastoreService datastore,
+			int limit, int offset) {
 		return getIds(datastore, null, limit, offset);
 	}
 
-	protected List<I> getIds(DatastoreService datastore,
+	protected Iterator<? extends I> getIds(DatastoreService datastore,
 			Transaction transaction, int limit, int offset) {
 		Query query = new Query(getKind());
-		query.setKeysOnly();
 
-		return searchIds(datastore, transaction, query, offset, limit);
+		return searchIds(datastore, transaction, query,
+				limitAndOffset(limit, offset));
 	}
 
 	@Override
-	public Iterator<I> getAllIds() throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return getAllIds(datastore);
+	public Iterator<? extends I> getAllIds() throws DatabaseException {
+		return getAllIds(DatastoreServiceFactory.getDatastoreService());
 	}
 
-	protected Iterator<I> getAllIds(DatastoreService datastore)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends I> getAllIds(DatastoreService datastore)
+			throws DatabaseException {
 		return getAllIds(datastore, null);
 	}
 
-	protected Iterator<I> getAllIds(DatastoreService datastore,
-			Transaction transaction) throws InterruptedTransactionException {
+	protected Iterator<? extends I> getAllIds(DatastoreService datastore,
+			Transaction transaction) throws DatabaseException {
 		Query query = new Query(getKind());
-		query.setKeysOnly();
 
 		return searchIds(datastore, transaction, query);
 	}
 
 	@Override
-	public V get(I id) throws InterruptedTransactionException,
-			IdNotFoundException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return get(datastore, id);
+	public V get(I id) throws IdNotFoundException, DatabaseException {
+		return get(DatastoreServiceFactory.getDatastoreService(), id);
 	}
 
 	protected V get(DatastoreService datastore, I id)
-			throws InterruptedTransactionException, IdNotFoundException {
+			throws IdNotFoundException, DatabaseException {
 		return get(datastore, null, id);
 	}
 
 	protected V get(DatastoreService datastore, Transaction transaction, I id)
-			throws InterruptedTransactionException, IdNotFoundException {
+			throws IdNotFoundException, DatabaseException {
 		try {
 			Entity entity = datastore.get(transaction, toKey(id));
 			return toValue(entity);
@@ -167,204 +152,148 @@ public abstract class Database<I, V extends Value<I>> implements
 	}
 
 	@Override
-	public List<V> get(I... ids) throws InterruptedTransactionException,
-			IdNotFoundException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return get(datastore, ids);
+	public Iterator<? extends V> get(Iterable<? extends I> ids)
+			throws DatabaseException {
+		return get(DatastoreServiceFactory.getDatastoreService(), ids);
 	}
 
-	protected List<V> get(DatastoreService datastore, I... ids)
-			throws InterruptedTransactionException, IdNotFoundException {
+	protected Iterator<? extends V> get(DatastoreService datastore,
+			Iterable<? extends I> ids) throws DatabaseException {
 		return get(datastore, null, ids);
 	}
 
-	protected List<V> get(DatastoreService datastore, Transaction transaction,
-			I... ids) throws InterruptedTransactionException,
-			IdNotFoundException {
+	protected Iterator<? extends V> get(DatastoreService datastore,
+			Transaction transaction, Iterable<? extends I> ids)
+			throws DatabaseException {
 		return getByKeys(datastore, transaction, idsToKeys(ids));
 	}
 
-	@Override
-	public List<V> get(Iterable<I> ids) throws InterruptedTransactionException,
-			IdNotFoundException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return get(datastore, ids);
-	}
-
-	protected List<V> get(DatastoreService datastore, Iterable<I> ids)
-			throws InterruptedTransactionException, IdNotFoundException {
-		return get(datastore, null, ids);
-	}
-
-	protected List<V> get(DatastoreService datastore, Transaction transaction,
-			Iterable<I> ids) throws InterruptedTransactionException,
-			IdNotFoundException {
-		return getByKeys(datastore, transaction, idsToKeys(ids));
-	}
-
-	protected List<V> getByKeys(DatastoreService datastore,
+	protected Iterator<? extends V> getByKeys(DatastoreService datastore,
 			Transaction transaction, Iterable<Key> keys)
-			throws InterruptedTransactionException, IdNotFoundException {
-		try {
-			Map<Key, Entity> entities = datastore.get(transaction, keys);
+			throws DatabaseException {
+		Map<Key, Entity> entities = datastore.get(transaction, keys);
 
-			List<V> values = new ArrayList<V>();
-			for (Key key : keys) {
-				values.add(toValue(entities.get(key)));
-			}
-
-			return values;
-		} catch (IllegalArgumentException e) {
-			throw new IdNotFoundException(null, e);
+		List<V> values = new ArrayList<V>();
+		for (Key key : keys) {
+			values.add(toValue(entities.get(key)));
 		}
+
+		return values.iterator();
 	}
 
 	@Override
-	public List<V> get(int limit) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return get(datastore, limit);
+	public Iterator<? extends V> get(int limit) throws DatabaseException {
+		return get(DatastoreServiceFactory.getDatastoreService(), limit);
 	}
 
-	protected List<V> get(DatastoreService datastore, int limit)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends V> get(DatastoreService datastore, int limit)
+			throws DatabaseException {
 		return get(datastore, null, limit);
 	}
 
-	protected List<V> get(DatastoreService datastore, Transaction transaction,
-			int limit) throws InterruptedTransactionException {
+	protected Iterator<? extends V> get(DatastoreService datastore,
+			Transaction transaction, int limit) throws DatabaseException {
 		return get(datastore, transaction, limit, 0);
 	}
 
 	@Override
-	public List<V> get(int limit, int offset)
-			throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return get(datastore, limit, offset);
+	public Iterator<? extends V> get(int limit, int offset)
+			throws DatabaseException {
+		return get(DatastoreServiceFactory.getDatastoreService(), limit, offset);
 	}
 
-	protected List<V> get(DatastoreService datastore, int limit, int offset)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends V> get(DatastoreService datastore, int limit,
+			int offset) throws DatabaseException {
 		return get(datastore, null, limit, offset);
 	}
 
-	protected List<V> get(DatastoreService datastore, Transaction transaction,
-			int limit, int offset) throws InterruptedTransactionException {
-		return search(datastore, transaction, new Query(getKind()), offset,
-				limit);
+	protected Iterator<? extends V> get(DatastoreService datastore,
+			Transaction transaction, int limit, int offset)
+			throws DatabaseException {
+		return search(datastore, transaction, new Query(getKind()),
+				limitAndOffset(limit, offset));
 	}
 
 	@Override
-	public Iterator<V> getAll() throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		return getAll(datastore);
+	public Iterator<? extends V> getAll() throws DatabaseException {
+		return getAll(DatastoreServiceFactory.getDatastoreService());
 	}
 
-	protected Iterator<V> getAll(DatastoreService datastore)
-			throws InterruptedTransactionException {
+	protected Iterator<? extends V> getAll(DatastoreService datastore)
+			throws DatabaseException {
 		return getAll(datastore, null);
 	}
 
-	protected Iterator<V> getAll(DatastoreService datastore,
-			Transaction transaction) throws InterruptedTransactionException {
+	protected Iterator<? extends V> getAll(DatastoreService datastore,
+			Transaction transaction) throws DatabaseException {
 		return search(datastore, transaction, new Query(getKind()));
 	}
 
 	@Override
-	public I add(V value) throws InterruptedTransactionException,
-			DuplicateIdException {
-		return add(value, 0);
-	}
-
-	protected I add(V value, int retryCount)
-			throws InterruptedTransactionException, DuplicateIdException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		Transaction transaction = datastore.beginTransaction();
-		try {
-			I id = add(datastore, transaction, value);
-			transaction.commit();
-
-			return id;
-		} catch (DatastoreFailureException e) {
-			if (retryCount < NUMBER_OF_MAX_RETRIES) {
-				return add(value, retryCount + 1);
-			}
-
-			throw new InterruptedTransactionException(e);
-		} catch (InterruptedTransactionException e) {
-			transaction.rollback();
-			throw e;
-		} catch (DuplicateIdException e) {
-			transaction.rollback();
-			throw e;
-		}
+	public I add(V value) throws DuplicateIdException, DatabaseException {
+		return add(DatastoreServiceFactory.getDatastoreService(), value);
 	}
 
 	protected I add(DatastoreService datastore, V value)
-			throws InterruptedTransactionException, DuplicateIdException {
-		return add(datastore, null, value);
+			throws DuplicateIdException, DatabaseException {
+		for (int retryCount = 0; true; retryCount++) {
+			Transaction transaction = datastore.beginTransaction();
+			try {
+				I id = add(datastore, transaction, value);
+				transaction.commit();
+
+				return id;
+			} catch (DuplicateIdException e) {
+				transaction.rollback();
+				throw e;
+			} catch (DatastoreFailureException e) {
+				if (retryCount < NUMBER_OF_MAX_RETRIES) {
+					continue;
+				}
+
+				transaction.rollback();
+				throw new DatabaseException(e);
+			}
+		}
 	}
 
 	protected I add(DatastoreService datastore, Transaction transaction, V value)
-			throws InterruptedTransactionException, DuplicateIdException {
+			throws DuplicateIdException, DatabaseException {
 		I id = value.getId();
-		if (id == null) {
-			return toId(datastore.put(transaction, toEntity(value)));
-		}
-
-		try {
-			datastore.get(transaction, toKey(id));
-
+		if (id != null && exists(id)) {
 			throw new DuplicateIdException(id);
-		} catch (EntityNotFoundException e) {
-			return toId(datastore.put(transaction, toEntity(value)));
 		}
+
+		return toId(datastore.put(transaction, toEntity(value)));
 	}
 
 	@Override
-	public void put(V value) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		put(datastore, value);
+	public void put(V value) throws DatabaseException {
+		put(DatastoreServiceFactory.getDatastoreService(), value);
 	}
 
 	protected void put(DatastoreService datastore, V value)
-			throws InterruptedTransactionException {
+			throws DatabaseException {
 		put(datastore, null, value);
 	}
 
 	protected void put(DatastoreService datastore, Transaction transaction,
-			V value) throws InterruptedTransactionException {
+			V value) throws DatabaseException {
 		datastore.put(transaction, toEntity(value));
 	}
 
 	@Override
-	public void put(Iterable<V> values) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		put(datastore, values);
+	public void put(Iterable<? extends V> values) throws DatabaseException {
+		put(DatastoreServiceFactory.getDatastoreService(), values);
 	}
 
-	protected void put(DatastoreService datastore, Iterable<V> values)
-			throws InterruptedTransactionException {
+	protected void put(DatastoreService datastore, Iterable<? extends V> values)
+			throws DatabaseException {
 		put(datastore, null, values);
 	}
 
 	protected void put(DatastoreService datastore, Transaction transaction,
-			Iterable<V> values) throws InterruptedTransactionException {
+			Iterable<? extends V> values) throws DatabaseException {
 		List<Entity> entities = new ArrayList<Entity>();
 		for (V value : values) {
 			entities.add(toEntity(value));
@@ -374,95 +303,57 @@ public abstract class Database<I, V extends Value<I>> implements
 	}
 
 	@Override
-	public void remove(I id) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		remove(datastore, id);
+	public void remove(I id) throws DatabaseException {
+		remove(DatastoreServiceFactory.getDatastoreService(), id);
 	}
 
 	protected void remove(DatastoreService datastore, I id)
-			throws InterruptedTransactionException {
+			throws DatabaseException {
 		remove(datastore, null, id);
 	}
 
 	protected void remove(DatastoreService datastore, Transaction transaction,
-			I id) throws InterruptedTransactionException {
+			I id) throws DatabaseException {
 		datastore.delete(transaction, toKey(id));
 	}
 
 	@Override
-	public void remove(Iterable<I> ids) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		remove(datastore, ids);
+	public void remove(Iterable<? extends I> ids) throws DatabaseException {
+		remove(DatastoreServiceFactory.getDatastoreService(), ids);
 	}
 
-	protected void remove(DatastoreService datastore, Iterable<I> ids)
-			throws InterruptedTransactionException {
+	protected void remove(DatastoreService datastore, Iterable<? extends I> ids)
+			throws DatabaseException {
 		remove(datastore, null, ids);
 	}
 
 	protected void remove(DatastoreService datastore, Transaction transaction,
-			Iterable<I> ids) throws InterruptedTransactionException {
-		List<Key> keys = new ArrayList<Key>();
-		for (I id : ids) {
-			keys.add(toKey(id));
+			Iterable<? extends I> ids) throws DatabaseException {
+		try {
+			datastore.delete(transaction, idsToKeys(ids));
+		} catch (IllegalArgumentException | ConcurrentModificationException
+				| DatastoreFailureException e) {
+			throw new DatabaseException(e);
 		}
-
-		datastore.delete(transaction, keys);
 	}
 
 	@Override
-	public void remove(int limit) throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		remove(datastore, limit);
-	}
-
-	protected void remove(DatastoreService datastore, int limit)
-			throws InterruptedTransactionException {
-		remove(datastore, null, limit);
-	}
-
-	protected void remove(DatastoreService datastore, Transaction transaction,
-			int limit) throws InterruptedTransactionException {
-		Query query = new Query(getKind());
-		query.setKeysOnly();
-
-		List<Entity> entities = searchEntities(datastore, transaction, query,
-				0, limit);
-
-		List<Key> keys = new ArrayList<Key>();
-		for (Entity entity : entities) {
-			keys.add(entity.getKey());
-		}
-
-		datastore.delete(transaction, keys);
-	}
-
-	@Override
-	public void removeAll() throws InterruptedTransactionException {
-		DatastoreService datastore = DatastoreServiceFactory
-				.getDatastoreService();
-
-		removeAll(datastore);
+	public void removeAll() throws DatabaseException {
+		removeAll(DatastoreServiceFactory.getDatastoreService());
 	}
 
 	protected void removeAll(DatastoreService datastore)
-			throws InterruptedTransactionException {
+			throws DatabaseException {
 		removeAll(datastore, null);
 	}
 
 	protected void removeAll(DatastoreService datastore, Transaction transaction)
-			throws InterruptedTransactionException {
+			throws DatabaseException {
 		Query query = new Query(getKind());
 		query.setKeysOnly();
 
-		Iterator<Entity> iterator = searchEntities(datastore, transaction,
-				query);
+		Iterator<? extends Entity> iterator = searchEntities(datastore,
+				transaction, query, null);
 
 		List<Key> keys = new ArrayList<Key>();
 		while (iterator.hasNext()) {
@@ -472,41 +363,52 @@ public abstract class Database<I, V extends Value<I>> implements
 		datastore.delete(transaction, keys);
 	}
 
-	protected List<Entity> searchEntities(DatastoreService datastore,
-			Transaction transaction, Query query, int offset, int limit) {
-		FetchOptions fetchOptions = FetchOptions.Builder.withLimit(limit);
+	protected FetchOptions limitAndOffset(int limit, int offset) {
+		return limitAndOffset(null, limit, offset);
+	}
+
+	protected FetchOptions limitAndOffset(FetchOptions options, int limit,
+			int offset) {
+		if (options == null) {
+			options = FetchOptions.Builder.withLimit(limit);
+		} else {
+			options.limit(limit);
+		}
 		if (offset > 0) {
-			fetchOptions.offset(offset);
+			options.offset(offset);
 		}
 
-		return datastore.prepare(transaction, query).asList(fetchOptions);
+		return options;
 	}
 
-	protected List<I> searchIds(DatastoreService datastore,
-			Transaction transaction, Query query, int offset, int limit) {
-		return entitiesToIds(searchEntities(datastore, transaction, query,
-				offset, limit));
+	protected Iterator<? extends Entity> searchEntities(
+			DatastoreService datastore, Transaction transaction, Query query,
+			FetchOptions fetchOptions) {
+		return datastore.prepare(transaction, query).asIterator(fetchOptions);
 	}
 
-	protected List<V> search(DatastoreService datastore,
-			Transaction transaction, Query query, int offset, int limit) {
-		return entitiesToValues(searchEntities(datastore, transaction, query,
-				offset, limit));
+	protected Iterator<? extends I> searchIds(DatastoreService datastore,
+			Transaction transaction, Query query, FetchOptions options) {
+		query.setKeysOnly();
+		return new IdIterator(searchEntities(datastore, transaction, query,
+				options));
 	}
 
-	protected Iterator<Entity> searchEntities(DatastoreService datastore,
+	protected Iterator<? extends V> search(DatastoreService datastore,
+			Transaction transaction, Query query, FetchOptions options) {
+		return new ValueIterator(searchEntities(datastore, transaction, query,
+				options));
+	}
+
+	protected Iterator<? extends I> searchIds(DatastoreService datastore,
 			Transaction transaction, Query query) {
-		return datastore.prepare(transaction, query).asIterator();
+		query.setKeysOnly();
+		return searchIds(datastore, transaction, query, null);
 	}
 
-	protected Iterator<I> searchIds(DatastoreService datastore,
+	protected Iterator<? extends V> search(DatastoreService datastore,
 			Transaction transaction, Query query) {
-		return new IdIterator(searchEntities(datastore, transaction, query));
-	}
-
-	protected Iterator<V> search(DatastoreService datastore,
-			Transaction transaction, Query query) {
-		return new ValueIterator(searchEntities(datastore, transaction, query));
+		return search(datastore, transaction, query, null);
 	}
 
 	protected abstract String getKind();
@@ -519,36 +421,7 @@ public abstract class Database<I, V extends Value<I>> implements
 
 	protected abstract Entity toEntity(V value);
 
-	protected List<I> entitiesToIds(Iterable<Entity> entities) {
-		List<I> ids = new ArrayList<I>();
-
-		for (Entity entity : entities) {
-			ids.add(toId(entity.getKey()));
-		}
-
-		return ids;
-	}
-
-	protected List<V> entitiesToValues(List<Entity> entities) {
-		List<V> values = new ArrayList<V>(entities.size());
-		for (Entity entity : entities) {
-			values.add(toValue(entity));
-		}
-
-		return values;
-	}
-
-	protected List<Key> idsToKeys(I... ids) {
-		List<Key> keys = new ArrayList<Key>();
-
-		for (I id : ids) {
-			keys.add(toKey(id));
-		}
-
-		return keys;
-	}
-
-	protected List<Key> idsToKeys(Iterable<I> ids) {
+	protected Iterable<Key> idsToKeys(Iterable<? extends I> ids) {
 		List<Key> keys = new ArrayList<Key>();
 
 		for (I id : ids) {
@@ -567,7 +440,9 @@ public abstract class Database<I, V extends Value<I>> implements
 			throw new IllegalArgumentException("'propertyName' cannot be null.");
 		}
 
-		if (value != null) {
+		if (value == null) {
+			entity.removeProperty(propertyName);
+		} else {
 			entity.setProperty(propertyName, value);
 		}
 	}
@@ -581,15 +456,17 @@ public abstract class Database<I, V extends Value<I>> implements
 			throw new IllegalArgumentException("'propertyName' cannot be null.");
 		}
 
-		if (value != null) {
+		if (value == null) {
+			entity.removeProperty(propertyName);
+		} else {
 			entity.setUnindexedProperty(propertyName, value);
 		}
 	}
 
 	protected class IdIterator implements Iterator<I> {
-		private Iterator<Entity> entityIterator;
+		private Iterator<? extends Entity> entityIterator;
 
-		public IdIterator(Iterator<Entity> entityIterator) {
+		public IdIterator(Iterator<? extends Entity> entityIterator) {
 			super();
 			this.entityIterator = entityIterator;
 		}
@@ -621,9 +498,9 @@ public abstract class Database<I, V extends Value<I>> implements
 	}
 
 	protected class ValueIterator implements Iterator<V> {
-		private Iterator<Entity> entityIterator;
+		private Iterator<? extends Entity> entityIterator;
 
-		public ValueIterator(Iterator<Entity> entityIterator) {
+		public ValueIterator(Iterator<? extends Entity> entityIterator) {
 			super();
 			this.entityIterator = entityIterator;
 		}
