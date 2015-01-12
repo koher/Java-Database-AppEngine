@@ -1,4 +1,4 @@
-package org.koherent.database.appengine;
+package org.koherent.database.gae;
 
 import org.koherent.database.Value;
 
