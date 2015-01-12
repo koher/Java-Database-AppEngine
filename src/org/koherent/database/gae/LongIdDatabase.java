@@ -2,6 +2,7 @@ package org.koherent.database.gae;
 
 import org.koherent.database.Value;
 
+import com.google.appengine.api.datastore.Entity;
 import com.google.appengine.api.datastore.Key;
 import com.google.appengine.api.datastore.KeyFactory;
 
@@ -17,11 +18,11 @@ public abstract class LongIdDatabase<V extends Value<Long>> extends
 		return KeyFactory.createKey(getKind(), id);
 	}
 
-	public static Long keyToId(LongIdDatabase<Value<Long>> database, Key key) {
-		return database.toId(key);
+	protected Entity createNewEntity() {
+		return new Entity(getKind());
 	}
 
-	public static Key idToKey(LongIdDatabase<Value<Long>> database, Long id) {
-		return database.toKey(id);
+	protected Entity createEntity(Long id) {
+		return id == null ? createNewEntity() : new Entity(toKey(id));
 	}
 }
