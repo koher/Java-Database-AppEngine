@@ -403,12 +403,14 @@ public abstract class Database<I, V extends Value<I>> extends
 	protected Iterator<? extends I> searchIds(DatastoreService datastore,
 			Transaction transaction, Query query) {
 		query.setKeysOnly();
-		return searchIds(datastore, transaction, query, null);
+		return searchIds(datastore, transaction, query,
+				FetchOptions.Builder.withDefaults());
 	}
 
 	protected Iterator<? extends V> search(DatastoreService datastore,
 			Transaction transaction, Query query) {
-		return search(datastore, transaction, query, null);
+		return search(datastore, transaction, query,
+				FetchOptions.Builder.withDefaults());
 	}
 
 	protected abstract String getKind();
