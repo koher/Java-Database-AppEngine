@@ -42,22 +42,22 @@ public abstract class Database<I, V extends Value<I>> extends
 	protected boolean exists(DatastoreService datastore,
 			Transaction transaction, I id) throws DatabaseException {
 		return getExistingIds(datastore, transaction, Collections.singleton(id))
-				.hasNext();
+				.iterator().hasNext();
 	}
 
 	@Override
-	public Iterator<? extends I> getExistingIds(Iterable<? extends I> ids)
+	public Iterable<? extends I> getExistingIds(Iterable<? extends I> ids)
 			throws DatabaseException {
 		return getExistingIds(DatastoreServiceFactory.getDatastoreService(),
 				ids);
 	}
 
-	protected Iterator<? extends I> getExistingIds(DatastoreService datastore,
+	protected Iterable<? extends I> getExistingIds(DatastoreService datastore,
 			Iterable<? extends I> ids) throws DatabaseException {
 		return getExistingIds(datastore, null, ids);
 	}
 
-	protected Iterator<? extends I> getExistingIds(DatastoreService datastore,
+	protected Iterable<? extends I> getExistingIds(DatastoreService datastore,
 			Transaction transaction, Iterable<? extends I> ids)
 			throws DatabaseException {
 		Query query = new Query(getKind());
@@ -80,33 +80,33 @@ public abstract class Database<I, V extends Value<I>> extends
 	}
 
 	@Override
-	public Iterator<? extends I> getIds(int limit) throws DatabaseException {
+	public Iterable<? extends I> getIds(int limit) throws DatabaseException {
 		return getIds(DatastoreServiceFactory.getDatastoreService(), limit);
 	}
 
-	protected Iterator<? extends I> getIds(DatastoreService datastore, int limit)
+	protected Iterable<? extends I> getIds(DatastoreService datastore, int limit)
 			throws DatabaseException {
 		return getIds(datastore, null, limit);
 	}
 
-	protected Iterator<? extends I> getIds(DatastoreService datastore,
+	protected Iterable<? extends I> getIds(DatastoreService datastore,
 			Transaction transaction, int limit) throws DatabaseException {
 		return getIds(datastore, transaction, limit, 0);
 	}
 
 	@Override
-	public Iterator<? extends I> getIds(int limit, int offset)
+	public Iterable<? extends I> getIds(int limit, int offset)
 			throws DatabaseException {
 		return getIds(DatastoreServiceFactory.getDatastoreService(), limit,
 				offset);
 	}
 
-	protected Iterator<? extends I> getIds(DatastoreService datastore,
+	protected Iterable<? extends I> getIds(DatastoreService datastore,
 			int limit, int offset) {
 		return getIds(datastore, null, limit, offset);
 	}
 
-	protected Iterator<? extends I> getIds(DatastoreService datastore,
+	protected Iterable<? extends I> getIds(DatastoreService datastore,
 			Transaction transaction, int limit, int offset) {
 		Query query = new Query(getKind());
 
@@ -115,16 +115,16 @@ public abstract class Database<I, V extends Value<I>> extends
 	}
 
 	@Override
-	public Iterator<? extends I> getAllIds() throws DatabaseException {
+	public Iterable<? extends I> getAllIds() throws DatabaseException {
 		return getAllIds(DatastoreServiceFactory.getDatastoreService());
 	}
 
-	protected Iterator<? extends I> getAllIds(DatastoreService datastore)
+	protected Iterable<? extends I> getAllIds(DatastoreService datastore)
 			throws DatabaseException {
 		return getAllIds(datastore, null);
 	}
 
-	protected Iterator<? extends I> getAllIds(DatastoreService datastore,
+	protected Iterable<? extends I> getAllIds(DatastoreService datastore,
 			Transaction transaction) throws DatabaseException {
 		Query query = new Query(getKind());
 
@@ -152,23 +152,23 @@ public abstract class Database<I, V extends Value<I>> extends
 	}
 
 	@Override
-	public Iterator<? extends V> get(Iterable<? extends I> ids)
+	public Iterable<? extends V> get(Iterable<? extends I> ids)
 			throws DatabaseException {
 		return get(DatastoreServiceFactory.getDatastoreService(), ids);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore,
+	protected Iterable<? extends V> get(DatastoreService datastore,
 			Iterable<? extends I> ids) throws DatabaseException {
 		return get(datastore, null, ids);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore,
+	protected Iterable<? extends V> get(DatastoreService datastore,
 			Transaction transaction, Iterable<? extends I> ids)
 			throws DatabaseException {
 		return getByKeys(datastore, transaction, idsToKeys(ids));
 	}
 
-	protected Iterator<? extends V> getByKeys(DatastoreService datastore,
+	protected Iterable<? extends V> getByKeys(DatastoreService datastore,
 			Transaction transaction, Iterable<Key> keys)
 			throws DatabaseException {
 		Map<Key, Entity> entities = datastore.get(transaction, keys);
@@ -178,36 +178,36 @@ public abstract class Database<I, V extends Value<I>> extends
 			values.add(toValue(entities.get(key)));
 		}
 
-		return values.iterator();
+		return values;
 	}
 
 	@Override
-	public Iterator<? extends V> get(int limit) throws DatabaseException {
+	public Iterable<? extends V> get(int limit) throws DatabaseException {
 		return get(DatastoreServiceFactory.getDatastoreService(), limit);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore, int limit)
+	protected Iterable<? extends V> get(DatastoreService datastore, int limit)
 			throws DatabaseException {
 		return get(datastore, null, limit);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore,
+	protected Iterable<? extends V> get(DatastoreService datastore,
 			Transaction transaction, int limit) throws DatabaseException {
 		return get(datastore, transaction, limit, 0);
 	}
 
 	@Override
-	public Iterator<? extends V> get(int limit, int offset)
+	public Iterable<? extends V> get(int limit, int offset)
 			throws DatabaseException {
 		return get(DatastoreServiceFactory.getDatastoreService(), limit, offset);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore, int limit,
+	protected Iterable<? extends V> get(DatastoreService datastore, int limit,
 			int offset) throws DatabaseException {
 		return get(datastore, null, limit, offset);
 	}
 
-	protected Iterator<? extends V> get(DatastoreService datastore,
+	protected Iterable<? extends V> get(DatastoreService datastore,
 			Transaction transaction, int limit, int offset)
 			throws DatabaseException {
 		return search(datastore, transaction, new Query(getKind()),
@@ -215,16 +215,16 @@ public abstract class Database<I, V extends Value<I>> extends
 	}
 
 	@Override
-	public Iterator<? extends V> getAll() throws DatabaseException {
+	public Iterable<? extends V> getAll() throws DatabaseException {
 		return getAll(DatastoreServiceFactory.getDatastoreService());
 	}
 
-	protected Iterator<? extends V> getAll(DatastoreService datastore)
+	protected Iterable<? extends V> getAll(DatastoreService datastore)
 			throws DatabaseException {
 		return getAll(datastore, null);
 	}
 
-	protected Iterator<? extends V> getAll(DatastoreService datastore,
+	protected Iterable<? extends V> getAll(DatastoreService datastore,
 			Transaction transaction) throws DatabaseException {
 		return search(datastore, transaction, new Query(getKind()));
 	}
@@ -352,12 +352,9 @@ public abstract class Database<I, V extends Value<I>> extends
 		Query query = new Query(getKind());
 		query.setKeysOnly();
 
-		Iterator<? extends Entity> iterator = searchEntities(datastore,
-				transaction, query, null);
-
 		List<Key> keys = new ArrayList<Key>();
-		while (iterator.hasNext()) {
-			keys.add(iterator.next().getKey());
+		for (Entity entity : searchEntities(datastore, transaction, query, null)) {
+			keys.add(entity.getKey());
 		}
 
 		datastore.delete(transaction, keys);
@@ -381,33 +378,47 @@ public abstract class Database<I, V extends Value<I>> extends
 		return options;
 	}
 
-	protected Iterator<? extends Entity> searchEntities(
+	protected Iterable<? extends Entity> searchEntities(
 			DatastoreService datastore, Transaction transaction, Query query,
 			FetchOptions fetchOptions) {
-		return datastore.prepare(transaction, query).asIterator(fetchOptions);
+		return datastore.prepare(transaction, query).asIterable(fetchOptions);
 	}
 
-	protected Iterator<? extends I> searchIds(DatastoreService datastore,
+	protected Iterable<? extends I> searchIds(DatastoreService datastore,
 			Transaction transaction, Query query, FetchOptions options) {
 		query.setKeysOnly();
-		return new IdIterator(searchEntities(datastore, transaction, query,
-				options));
+		final Iterable<? extends Entity> entities = searchEntities(datastore,
+				transaction, query, options);
+
+		return new Iterable<I>() {
+			@Override
+			public Iterator<I> iterator() {
+				return new IdIterator(entities.iterator());
+			}
+		};
 	}
 
-	protected Iterator<? extends V> search(DatastoreService datastore,
+	protected Iterable<? extends V> search(DatastoreService datastore,
 			Transaction transaction, Query query, FetchOptions options) {
-		return new ValueIterator(searchEntities(datastore, transaction, query,
-				options));
+		final Iterable<? extends Entity> entities = searchEntities(datastore,
+				transaction, query, options);
+
+		return new Iterable<V>() {
+			@Override
+			public Iterator<V> iterator() {
+				return new ValueIterator(entities.iterator());
+			}
+		};
 	}
 
-	protected Iterator<? extends I> searchIds(DatastoreService datastore,
+	protected Iterable<? extends I> searchIds(DatastoreService datastore,
 			Transaction transaction, Query query) {
 		query.setKeysOnly();
 		return searchIds(datastore, transaction, query,
 				FetchOptions.Builder.withDefaults());
 	}
 
-	protected Iterator<? extends V> search(DatastoreService datastore,
+	protected Iterable<? extends V> search(DatastoreService datastore,
 			Transaction transaction, Query query) {
 		return search(datastore, transaction, query,
 				FetchOptions.Builder.withDefaults());
