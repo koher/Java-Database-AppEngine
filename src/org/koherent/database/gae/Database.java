@@ -260,8 +260,12 @@ public abstract class Database<I, V extends Value<I>> extends
 	protected I add(DatastoreService datastore, Transaction transaction, V value)
 			throws DuplicateIdException, DatabaseException {
 		I id = value.getId();
-		if (id != null && exists(id)) {
-			throw new DuplicateIdException(id);
+		if (id != null) {
+			try {
+				get(datastore, transaction, id);
+				throw new DuplicateIdException(id);
+			} catch (IdNotFoundException e) {
+			}
 		}
 
 		return toId(datastore.put(transaction, toEntity(value)));
