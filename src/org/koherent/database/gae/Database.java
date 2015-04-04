@@ -243,16 +243,18 @@ public abstract class Database<I, V extends Value<I>> extends
 				transaction.commit();
 
 				return id;
-			} catch (DuplicateIdException e) {
-				transaction.rollback();
-				throw e;
 			} catch (DatastoreFailureException e) {
+				throw new DatabaseException(e);
+			} catch (ConcurrentModificationException e) {
 				if (retryCount < NUMBER_OF_MAX_RETRIES) {
 					continue;
 				}
 
-				transaction.rollback();
 				throw new DatabaseException(e);
+			} finally {
+				if (transaction.isActive()) {
+					transaction.rollback();
+				}
 			}
 		}
 	}
