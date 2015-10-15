@@ -1,3 +1,3 @@
 [submodule "Java-Database"]
 	path = Java-Database
-	url = git@github.com:koher/Java-Database.git
+	url = https://github.com/koher/Java-Database.git
