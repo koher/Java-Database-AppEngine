@@ -13,6 +13,7 @@ import org.koherent.database.AbstractDatabase;
 import org.koherent.database.DatabaseException;
 import org.koherent.database.DuplicateIdException;
 import org.koherent.database.IdNotFoundException;
+import org.koherent.database.IllegalUpdateException;
 import org.koherent.database.Value;
 
 import com.google.appengine.api.datastore.DatastoreFailureException;
@@ -364,6 +365,65 @@ public abstract class Database<I, V extends Value<I>> extends
 		}
 
 		datastore.delete(transaction, keys);
+	}
+
+	@Override
+	public V update(I id, Updater<V> updater) throws IllegalUpdateException,
+			DatabaseException {
+		return update(DatastoreServiceFactory.getDatastoreService(), id,
+				updater);
+	}
+
+	protected V update(DatastoreService datastore, I id, Updater<V> updater)
+			throws IllegalUpdateException, DatabaseException {
+		for (int retryCount = 0; true; retryCount++) {
+			Transaction transaction = createUpdateTransaction(datastore);
+			try {
+				V newValue;
+				try {
+					V oldValue = get(datastore, transaction, id);
+					newValue = updater.update(oldValue);
+					if (newValue != null && !id.equals(newValue.getId())) {
+						throw new IllegalUpdateException();
+					}
+				} catch (IdNotFoundException e) {
+					newValue = updater.update(null);
+					if (newValue == null) {
+						throw new IllegalUpdateException();
+					}
+					I newId = newValue.getId();
+					if (newId != null && !id.equals(newId)) {
+						throw new IllegalUpdateException();
+					}
+				}
+
+				if (newValue == null) {
+					remove(datastore, transaction, id);
+				} else {
+					put(datastore, transaction, newValue);
+				}
+
+				transaction.commit();
+
+				return newValue;
+			} catch (DatastoreFailureException e) {
+				throw new DatabaseException(e);
+			} catch (ConcurrentModificationException e) {
+				if (retryCount < NUMBER_OF_MAX_RETRIES) {
+					continue;
+				}
+
+				throw new DatabaseException(e);
+			} finally {
+				if (transaction.isActive()) {
+					transaction.rollback();
+				}
+			}
+		}
+	}
+
+	protected Transaction createUpdateTransaction(DatastoreService datastore) {
+		return datastore.beginTransaction();
 	}
 
 	protected FetchOptions limitAndOffset(int limit, int offset) {
