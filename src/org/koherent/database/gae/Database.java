@@ -271,7 +271,7 @@ public abstract class Database<I, V extends Value<I>> extends
 			}
 		}
 
-		return toId(datastore.put(transaction, toEntity(value)));
+		return toId(put(datastore, transaction, value));
 	}
 
 	@Override
@@ -279,14 +279,14 @@ public abstract class Database<I, V extends Value<I>> extends
 		put(DatastoreServiceFactory.getDatastoreService(), value);
 	}
 
-	protected void put(DatastoreService datastore, V value)
+	protected Key put(DatastoreService datastore, V value)
 			throws DatabaseException {
-		put(datastore, null, value);
+		return put(datastore, null, value);
 	}
 
-	protected void put(DatastoreService datastore, Transaction transaction,
+	protected Key put(DatastoreService datastore, Transaction transaction,
 			V value) throws DatabaseException {
-		datastore.put(transaction, toEntity(value));
+		return datastorePut(datastore, transaction, value);
 	}
 
 	@Override
@@ -294,19 +294,15 @@ public abstract class Database<I, V extends Value<I>> extends
 		put(DatastoreServiceFactory.getDatastoreService(), values);
 	}
 
-	protected void put(DatastoreService datastore, Iterable<? extends V> values)
-			throws DatabaseException {
-		put(datastore, null, values);
+	protected List<Key> put(DatastoreService datastore,
+			Iterable<? extends V> values) throws DatabaseException {
+		return put(datastore, null, values);
 	}
 
-	protected void put(DatastoreService datastore, Transaction transaction,
-			Iterable<? extends V> values) throws DatabaseException {
-		List<Entity> entities = new ArrayList<Entity>();
-		for (V value : values) {
-			entities.add(toEntity(value));
-		}
-
-		datastore.put(transaction, entities);
+	protected List<Key> put(DatastoreService datastore,
+			Transaction transaction, Iterable<? extends V> values)
+			throws DatabaseException {
+		return datastorePut(datastore, transaction, values);
 	}
 
 	@Override
@@ -321,7 +317,7 @@ public abstract class Database<I, V extends Value<I>> extends
 
 	protected void remove(DatastoreService datastore, Transaction transaction,
 			I id) throws DatabaseException {
-		datastore.delete(transaction, toKey(id));
+		datastoreDelete(datastore, transaction, id);
 	}
 
 	@Override
@@ -337,7 +333,7 @@ public abstract class Database<I, V extends Value<I>> extends
 	protected void remove(DatastoreService datastore, Transaction transaction,
 			Iterable<? extends I> ids) throws DatabaseException {
 		try {
-			datastore.delete(transaction, idsToKeys(ids));
+			datastoreDelete(datastore, transaction, ids);
 		} catch (IllegalArgumentException | ConcurrentModificationException
 				| DatastoreFailureException e) {
 			throw new DatabaseException(e);
@@ -524,6 +520,31 @@ public abstract class Database<I, V extends Value<I>> extends
 		} else {
 			entity.setProperty(propertyName, value);
 		}
+	}
+
+	protected Key datastorePut(DatastoreService datastore,
+			Transaction transaction, V value) {
+		return datastore.put(toEntity(value));
+	}
+
+	protected List<Key> datastorePut(DatastoreService datastore,
+			Transaction transaction, Iterable<? extends V> values) {
+		List<Entity> entities = new ArrayList<Entity>();
+		for (V value : values) {
+			entities.add(toEntity(value));
+		}
+
+		return datastore.put(entities);
+	}
+
+	protected void datastoreDelete(DatastoreService datastore,
+			Transaction transaction, I id) {
+		datastore.delete(transaction, toKey(id));
+	}
+
+	protected void datastoreDelete(DatastoreService datastore,
+			Transaction transaction, Iterable<? extends I> ids) {
+		datastore.delete(transaction, idsToKeys(ids));
 	}
 
 	protected static void setUnindexedPropertyIfNotNull(Entity entity,
