@@ -16,4 +16,9 @@ public abstract class StringIdDatabase<V extends Value<String>> extends
 	protected Key toKey(String id) {
 		return KeyFactory.createKey(getKind(), id);
 	}
+
+	@Override
+	protected V assignId(V value, String id) {
+		return value;
+	}
 }

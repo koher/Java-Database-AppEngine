@@ -232,18 +232,19 @@ public abstract class Database<I, V extends Value<I>> extends
 
 	@Override
 	public I add(V value) throws DuplicateIdException, DatabaseException {
-		return add(DatastoreServiceFactory.getDatastoreService(), value);
+		return add(DatastoreServiceFactory.getDatastoreService(), value)
+				.getId();
 	}
 
-	protected I add(DatastoreService datastore, V value)
+	protected V add(DatastoreService datastore, V value)
 			throws DuplicateIdException, DatabaseException {
 		for (int retryCount = 0; true; retryCount++) {
 			Transaction transaction = datastore.beginTransaction();
 			try {
-				I id = add(datastore, transaction, value);
+				V newValue = add(datastore, transaction, value);
 				transaction.commit();
 
-				return id;
+				return newValue;
 			} catch (DatastoreFailureException e) {
 				throw new DatabaseException(e);
 			} catch (ConcurrentModificationException e) {
@@ -260,7 +261,7 @@ public abstract class Database<I, V extends Value<I>> extends
 		}
 	}
 
-	protected I add(DatastoreService datastore, Transaction transaction, V value)
+	protected V add(DatastoreService datastore, Transaction transaction, V value)
 			throws DuplicateIdException, DatabaseException {
 		I id = value.getId();
 		if (id != null) {
@@ -271,7 +272,7 @@ public abstract class Database<I, V extends Value<I>> extends
 			}
 		}
 
-		return toId(put(datastore, transaction, value));
+		return put(datastore, transaction, value);
 	}
 
 	@Override
@@ -279,14 +280,19 @@ public abstract class Database<I, V extends Value<I>> extends
 		put(DatastoreServiceFactory.getDatastoreService(), value);
 	}
 
-	protected Key put(DatastoreService datastore, V value)
+	protected V put(DatastoreService datastore, V value)
 			throws DatabaseException {
 		return put(datastore, null, value);
 	}
 
-	protected Key put(DatastoreService datastore, Transaction transaction,
-			V value) throws DatabaseException {
-		return datastorePut(datastore, transaction, value);
+	protected V put(DatastoreService datastore, Transaction transaction, V value)
+			throws DatabaseException {
+		Key key = datastorePut(datastore, transaction, value);
+		if (value.getId() != null) {
+			return value;
+		}
+
+		return assignId(value, toId(key));
 	}
 
 	@Override
@@ -382,21 +388,24 @@ public abstract class Database<I, V extends Value<I>> extends
 					if (newValue != null && !id.equals(newValue.getId())) {
 						throw new IllegalUpdateException();
 					}
+					if (newValue == null) {
+						remove(datastore, transaction, id);
+					} else {
+						newValue = put(datastore, transaction, newValue);
+					}
 				} catch (IdNotFoundException e) {
 					newValue = updater.update(null);
-					if (newValue == null) {
-						throw new IllegalUpdateException();
+					if (newValue != null) {
+						I newId = newValue.getId();
+						if (newId != null && !id.equals(newId)) {
+							throw new IllegalUpdateException();
+						}
+						try {
+							newValue = add(datastore, transaction, newValue);
+						} catch (DuplicateIdException _) {
+							throw new Error("Never reaches here.");
+						}
 					}
-					I newId = newValue.getId();
-					if (newId != null && !id.equals(newId)) {
-						throw new IllegalUpdateException();
-					}
-				}
-
-				if (newValue == null) {
-					remove(datastore, transaction, id);
-				} else {
-					put(datastore, transaction, newValue);
 				}
 
 				transaction.commit();
@@ -485,6 +494,8 @@ public abstract class Database<I, V extends Value<I>> extends
 		return search(datastore, transaction, query,
 				FetchOptions.Builder.withDefaults());
 	}
+
+	protected abstract V assignId(V value, I id);
 
 	protected abstract String getKind();
 
